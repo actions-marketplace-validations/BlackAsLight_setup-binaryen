@@ -2,7 +2,9 @@
 
 ## Example
 ```yaml
-- uses: BlackAsLight/setup-binaryen@v1.0.0
+- uses: BlackAsLight/setup-binaryen@v1.1.0
+  env:
+    GH_TOKEN: ${{ github.token }}
   with:
     version: version_124 # default: latest
 ```
