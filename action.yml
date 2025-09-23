@@ -14,7 +14,7 @@ runs:
 
         VERSION="${{ inputs.version }}"
         if [ "$VERSION" = 'latest' ]; then
-          VERSION=$(curl -sL "https://api.github.com/repos/WebAssembly/binaryen/releases/latest" | jq -r '.tag_name')
+          VERSION=$(curl -L "https://api.github.com/repos/WebAssembly/binaryen/releases/latest" | jq -r '.tag_name')
         fi
         echo "Version: $VERSION"
 
@@ -44,10 +44,10 @@ runs:
         fi
         echo "Test: $ASSET"
 
-        ASSET=$(curl -sL "https://api.github.com/repos/WebAssembly/binaryen/releases/tags/$VERSION" | jq -r ".assets[].name | select(test(\"$ASSET\"))")
+        ASSET=$(curl -L "https://api.github.com/repos/WebAssembly/binaryen/releases/tags/$VERSION" | jq -r ".assets[].name | select(test(\"$ASSET\"))")
         echo "Asset: $ASSET"
 
         mkdir binaryen
-        curl -sL "https://github.com/WebAssembly/binaryen/releases/download/$VERSION/$ASSET" | tar -xzC binaryen --strip-components=1
+        curl -L "https://github.com/WebAssembly/binaryen/releases/download/$VERSION/$ASSET" | tar -xzC binaryen --strip-components=1
         ls binaryen/bin
         echo "$(pwd -W 2>/dev/null || pwd)/binaryen/bin" >> $GITHUB_PATH
