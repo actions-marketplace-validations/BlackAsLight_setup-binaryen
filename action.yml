@@ -1,0 +1,44 @@
+name: "Setup Binaryen"
+description: "Setup WebAssembly Binaryen Toolkit"
+inputs:
+  version:
+    description: "Version to Install"
+    default: "latest"
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Binaryen
+      shell: bash
+      run: |
+        set -e
+
+        VERSION="${{ inputs.version }}"
+        if [ "$VERSION" = 'latest' ]; then
+            VERSION=$(curl -sL "https://api.github.com/repos/WebAssembly/binaryen/releases/latest" | jq -r '.tag_name')
+        fi
+
+        if [ "$RUNNER_ARCH" = "X64" ]; then
+            ASSET="x86_64"
+        elif [ "$RUNNER_ARCH" = "ARM64" ]; then
+            ASSET="aarch64"
+        else
+            echo "Arch: $RUNNER_ARCH"
+            exit 1
+        fi
+
+        if [ "$RUNNER_OS" = 'Linux' ]; then
+            ASSET=".*$ASSET.*linux.*\\\\.tar\\\\.gz$"
+        elif [ "$RUNNER_OS" = 'macOS' ]; then
+            ASSET=".*ASSET.*macos.*\\\\.tar\\\\.gz$"
+        elif [ "$RUNNER_OS" = 'Windows' ]; then
+            ASSET=".*$ASSET.*windows.*\\\\.tar\\\\.gz$"
+        else
+            echo "Arch: $RUNNER_OS"
+            exit 1
+        fi
+
+        ASSET=$(curl -sL "https://api.github.com/repos/WebAssembly/binaryen/releases/tags/$VERSION" | jq -r ".assets[].name | select(test(\"$ASSET\"))")
+
+        mkdir binaryen
+        curl -sL "https://github.com/WebAssembly/binaryen/releases/download/$VERSION/$ASSET" | tar -xzC binaryen --strip-components=1
+        echo "$(pwd -W 2>/dev/null || pwd)/binyaren/bin" >> $GITHUB_PATH
