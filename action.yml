@@ -54,11 +54,11 @@ runs:
         --json assets -q ".assets[].name | select(test(\"$ASSET\"))")
         echo "Asset: $ASSET"
 
-        mkdir binaryen
+        TEMP=$(mktemp -d)
         gh release download $VERSION \
         --repo WebAssembly/binaryen \
         --pattern $ASSET \
         -O - \
-        | tar -xzC binaryen --strip-components=1
-        ls binaryen/bin
-        echo "$(pwd -W 2>/dev/null || pwd)/binaryen/bin" >> $GITHUB_PATH
+        | tar -xzC $TEMP --strip-components=1
+        ls $TEMP/bin
+        echo "$(cd "$TEMP/bin" && pwd -W 2>/dev/null || pwd)" >> $GITHUB_PATH
