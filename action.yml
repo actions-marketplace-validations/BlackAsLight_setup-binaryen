@@ -16,6 +16,7 @@ runs:
         if [ "$VERSION" = 'latest' ]; then
             VERSION=$(curl -sL "https://api.github.com/repos/WebAssembly/binaryen/releases/latest" | jq -r '.tag_name')
         fi
+        echo "Version: $VERSION"
 
         if [ "$RUNNER_ARCH" = "X64" ]; then
             ASSET="x86_64"
@@ -25,6 +26,7 @@ runs:
             echo "Arch: $RUNNER_ARCH"
             exit 1
         fi
+        echo "Arch: $ASSET"
 
         if [ "$RUNNER_OS" = 'Linux' ]; then
             ASSET=".*$ASSET.*linux.*\\\\.tar\\\\.gz$"
@@ -36,9 +38,12 @@ runs:
             echo "Arch: $RUNNER_OS"
             exit 1
         fi
+        echo "Test: $ASSET"
 
         ASSET=$(curl -sL "https://api.github.com/repos/WebAssembly/binaryen/releases/tags/$VERSION" | jq -r ".assets[].name | select(test(\"$ASSET\"))")
+        echo "Asset: $ASSET"
 
         mkdir binaryen
         curl -sL "https://github.com/WebAssembly/binaryen/releases/download/$VERSION/$ASSET" | tar -xzC binaryen --strip-components=1
+        ls binaryen/bin
         echo "$(pwd -W 2>/dev/null || pwd)/binyaren/bin" >> $GITHUB_PATH
