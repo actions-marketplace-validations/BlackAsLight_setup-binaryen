@@ -14,29 +14,33 @@ runs:
 
         VERSION="${{ inputs.version }}"
         if [ "$VERSION" = 'latest' ]; then
-            VERSION=$(curl -sL "https://api.github.com/repos/WebAssembly/binaryen/releases/latest" | jq -r '.tag_name')
+          VERSION=$(curl -sL "https://api.github.com/repos/WebAssembly/binaryen/releases/latest" | jq -r '.tag_name')
         fi
         echo "Version: $VERSION"
 
         if [ "$RUNNER_ARCH" = "X64" ]; then
-            ASSET="x86_64"
+          ASSET="x86_64"
         elif [ "$RUNNER_ARCH" = "ARM64" ]; then
+          if [ "$RUNNER_OS" = 'Linux' ]; then
             ASSET="aarch64"
+          else
+            ASSET="arm64"
+          fi
         else
-            echo "Arch: $RUNNER_ARCH"
-            exit 1
+          echo "Arch: $RUNNER_ARCH"
+          exit 1
         fi
         echo "Arch: $ASSET"
 
         if [ "$RUNNER_OS" = 'Linux' ]; then
-            ASSET=".*$ASSET.*linux.*\\\\.tar\\\\.gz$"
+          ASSET=".*$ASSET.*linux.*\\\\.tar\\\\.gz$"
         elif [ "$RUNNER_OS" = 'macOS' ]; then
-            ASSET=".*$ASSET.*macos.*\\\\.tar\\\\.gz$"
+          ASSET=".*$ASSET.*macos.*\\\\.tar\\\\.gz$"
         elif [ "$RUNNER_OS" = 'Windows' ]; then
-            ASSET=".*$ASSET.*windows.*\\\\.tar\\\\.gz$"
+          ASSET=".*$ASSET.*windows.*\\\\.tar\\\\.gz$"
         else
-            echo "Arch: $RUNNER_OS"
-            exit 1
+          echo "Arch: $RUNNER_OS"
+          exit 1
         fi
         echo "Test: $ASSET"
 
