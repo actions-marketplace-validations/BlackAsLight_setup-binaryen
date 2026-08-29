@@ -6,59 +6,108 @@ branding:
 inputs:
   version:
     description: "Version to Install"
+    required: false
     default: "latest"
+  cache:
+    description: "Whether to use Caching"
+    required: false
+    default: "true"
+outputs:
+  bin-path:
+    description: "Path to Binaryen Binaries"
+    value: ~/.binaryen
 runs:
   using: "composite"
   steps:
-    - name: Setup Binaryen
+    - name: Locate Source
+      id: source
       shell: bash
       run: |
         set -e
+        VERSION=${{ inputs.version }}
 
-        VERSION="${{ inputs.version }}"
-        if [ "$VERSION" = 'latest' ]; then
-          VERSION=$(gh release view \
-          --repo WebAssembly/binaryen \
-          --json tagName -q .tagName)
-        fi
-        echo "Version: $VERSION"
-
-        if [ "$RUNNER_ARCH" = "X64" ]; then
-          ASSET="x86_64"
-        elif [ "$RUNNER_ARCH" = "ARM64" ]; then
-          if [ "$RUNNER_OS" = 'Linux' ]; then
-            ASSET="aarch64"
+        if [ "$VERSION" = 'canary' ]; then
+          SHA=$(gh api repos/WebAssembly/binaryen/commits --jq '.[0].sha')
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo -e "\033[36mCanary SHA: $SHA\033[0m"
+          echo "key=binaryen-${{ runner.os }}-$SHA" >> "$GITHUB_OUTPUT"
+        else
+          if [ "$VERSION" = 'latest' ]; then
+            VERSION=$(gh api repos/WebAssembly/binaryen/releases/latest \
+              --jq '.name')
+            echo -e "\033[36mLatest Version: $VERSION\033[0m"
           else
-            ASSET="arm64"
+            echo -e "\033[36mProvided Version: $VERSION\033[0m"
           fi
-        else
-          echo "Arch: $RUNNER_ARCH"
-          exit 1
+          echo "key=binaryen-${{ runner.os }}-$VERSION" >> "$GITHUB_OUTPUT"
         fi
-        echo "Arch: $ASSET"
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+    - name: Restore Cache
+      id: cache
+      if: inputs.cache == 'true'
+      uses: actions/cache/restore@v6
+      with:
+        path: ~/.binaryen
+        key: ${{ steps.source.outputs.key }}
+    - name: Setup Binaryen
+      if: inputs.cache != 'true' || steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -e
+        VERSION=${{ steps.source.outputs.version }}
 
-        if [ "$RUNNER_OS" = 'Linux' ]; then
-          ASSET=".*$ASSET.*linux.*\\\\.tar\\\\.gz$"
-        elif [ "$RUNNER_OS" = 'macOS' ]; then
-          ASSET=".*$ASSET.*macos.*\\\\.tar\\\\.gz$"
-        elif [ "$RUNNER_OS" = 'Windows' ]; then
-          ASSET=".*$ASSET.*windows.*\\\\.tar\\\\.gz$"
+        if [ "$VERSION" = 'canary' ]; then
+          echo -e "\033[36mCloning Repo...\033[0m"
+          gh repo clone \
+            WebAssembly/binaryen \
+            ~/.binaryen/temp \
+            -- --recurse-submodules
+          git -C ~/.binaryen/temp checkout ${{ steps.source.outputs.sha }}
+
+          echo -e "\033[36mBuilding...\033[0m"
+          cmake \
+            -S ~/.binaryen/temp \
+            -B ~/.binaryen/temp/build \
+            -DCMAKE_INSTALL_PREFIX="$HOME/.binaryen" \
+            -DCMAKE_BUILD_TYPE=RELEASE
+          cmake --build ~/.binaryen/temp/build --config RELEASE --target install
+
+          echo -e "\033[36mCleaning Up...\033[0m"
+          rm -rf ~/.binaryen/temp
         else
-          echo "Arch: $RUNNER_OS"
-          exit 1
+          echo -e "\033[36mFetching Assets...\033[0m"
+          for ASSET in $(gh api \
+            repos/WebAssembly/binaryen/releases/tags/$VERSION \
+            --jq '.assets.[].name | select(test("\\.tar\\.gz$"))');
+          do
+            mkdir ~/.binaryen
+            echo -e "\033[36mFound Asset: $ASSET\033[0m"
+            gh release download $VERSION \
+              --repo WebAssembly/binaryen \
+              --pattern "$ASSET" \
+              -O - | tar -xzC ~/.binaryen --strip-components=1
+
+            if ~/.binaryen/bin/wasm-opt --version >/dev/null 2>&1; then
+              break
+            fi
+            echo -e "\033[36mBad Asset. Continuing...\033[0m"
+            rm -rf ~/.binaryen
+          done
+          if ! ~/.binaryen/bin/wasm-opt --version >/dev/null 2>&1; then
+            echo -e "\033[36mOut of Assets!\033[0m"
+            exit 1
+          fi
         fi
-        echo "Test: $ASSET"
-
-        ASSET=$(gh release view $VERSION \
-        --repo WebAssembly/binaryen \
-        --json assets -q ".assets[].name | select(test(\"$ASSET\"))")
-        echo "Asset: $ASSET"
-
-        TEMP=$(mktemp -d)
-        gh release download $VERSION \
-        --repo WebAssembly/binaryen \
-        --pattern $ASSET \
-        -O - \
-        | tar -xzC $TEMP --strip-components=1
-        ls $TEMP/bin
-        echo "$(cd "$TEMP/bin" && pwd -W 2>/dev/null || pwd)" >> $GITHUB_PATH
+    - name: Save Cache
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ~/.binaryen
+        key: ${{ steps.source.outputs.key }}
+    - name: Add Path
+      shell: bash
+      run: |
+        set -e
+        echo -e "\033[36mls ~/.binaryen/bin\033[0m"
+        ls ~/.binaryen/bin
+        echo "$(cd ~/.binaryen/bin && pwd -W 2>/dev/null || pwd)" >> "$GITHUB_PATH"
